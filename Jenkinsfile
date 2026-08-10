@@ -3,7 +3,7 @@ pipeline {
         docker {
             image 'hashicorp/terraform:1.6.0'
             // Se pasan credenciales de AWS y montajes necesarios
-            args '-u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
+            args '-u 0:0 --entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
 
