@@ -6,19 +6,19 @@ terraform {
       version = "~> 5.0"
     }
   }
-}
 
-provider "aws" {
-  region = "us-east-2"
-}
-
-backend "s3" {
+  backend "s3" {
     bucket         = "terraform-state-505231787824"
     key            = "frontend/products-app/terraform.tfstate"
     region         = "us-east-2"
     dynamodb_table = "terraform-locks"
     encrypt        = true
   }
+}
+
+provider "aws" {
+  region = "us-east-2"
+}
 
 # 1. Red y Seguridad (Grupo de Seguridad para habilitar acceso a Spring Boot y SSH)
 resource "aws_security_group" "permitir_trafico" {
@@ -86,7 +86,7 @@ output "ip_publica_backend" {
   value       = aws_instance.backend_server.public_ip
   description = "Usa esta IP para subir y correr Products-API en el puerto 8080"
 }
-npm
+
 output "url_frontend_s3" {
   value       = aws_s3_bucket_website_configuration.react_site.website_endpoint
   description = "Direccion para ver tu aplicacion React desplegada"
