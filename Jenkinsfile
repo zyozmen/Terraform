@@ -14,10 +14,9 @@ pipeline {
     }
 
     environment {
-        // Credenciales configuradas en Jenkins (Manage Jenkins -> Credentials)
-        AWS_CREDENTIALS = credentials('aws-credentials-id')
-        AWS_ACCESS_KEY_ID     = "${AWS_ACCESS_KEY_ID}"
-        AWS_SECRET_ACCESS_KEY = "${AWS_SECRET_ACCESS_KEY}"
+
+        AWS_ACCESS_KEY_ID     = "${env.AWS_CREDENTIALS_USR}"
+        AWS_SECRET_ACCESS_KEY = "${env.AWS_CREDENTIALS_PSW}"
         AWS_DEFAULT_REGION    = 'us-east-2'
         TF_IN_AUTOMATION      = 'true'
     }
@@ -98,8 +97,10 @@ pipeline {
 
     post {
         always {
-            // Limpieza de artefactos locales para evitar fuga de datos sensibles en la máquina host
-            sh 'rm -rf tfplan .terraform/environment'
+            // node('') corre en el host Jenkins donde el workspace aún existe tras destruir el contenedor
+            node('') {
+                sh 'rm -f tfplan .terraform/environment'
+            }
         }
         success {
             echo "[ÉXITO] Infraestructura actualizada correctamente."
