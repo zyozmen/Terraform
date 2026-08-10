@@ -11,7 +11,6 @@ pipeline {
         buildDiscarder(logRotator(numToKeepStr: '10'))
         disableConcurrentBuilds() // Evita race conditions sobre el estado de Terraform
         timeout(time: 1, unit: 'HOURS')
-        ansiColor('xterm')
     }
 
     environment {
