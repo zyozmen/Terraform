@@ -1,0 +1,81 @@
+# ============================================================
+# ECR REPOSITORY & LIFECYCLE (Registro de imagenes)
+# ============================================================
+
+resource "aws_ecr_repository" "products_service" {
+  name                 = "products-service"
+  image_tag_mutability = "MUTABLE"
+  force_delete         = false
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+}
+
+resource "aws_ecr_lifecycle_policy" "products_service_policy" {
+  repository = aws_ecr_repository.products_service.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Eliminar imagenes sin tag tras 1 dia"
+        selection    = { tagStatus = "untagged", countType = "sinceImagePushed", countUnit = "days", countNumber = 1 }
+        action       = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Conservar las ultimas 2 imagenes etiquetadas"
+        selection    = { tagStatus = "tagged", tagPrefixList = ["v", "build-", "latest"], countType = "imageCountMoreThan", countNumber = 2 }
+        action       = { type = "expire" }
+      }
+    ]
+  })
+}
+
+# ============================================================
+# CLUSTER DE KUBERNETES (AWS EKS)
+#
+# Nota SRE: este es el UNICO lugar donde se define el cluster,
+# los node groups y sus IAM roles. La aplicacion (repo Products)
+# no debe poseer estas definiciones; solo interactua actualizando
+# imagen/Deployment/Service dentro del namespace de la app.
+# ============================================================
+
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 19.15"
+
+  cluster_name    = "products-cluster"
+  cluster_version = var.cluster_version
+
+  cluster_endpoint_public_access = true
+
+  vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
+  subnet_ids = data.terraform_remote_state.networking.outputs.private_subnet_ids
+
+  # Configuracion de Nodos de Worker (Optimizacion de costos con Instancias Spot)
+  eks_managed_node_groups = {
+    spot_nodes = {
+      min_size     = 1
+      max_size     = 3
+      desired_size = 2
+
+      instance_types = ["t3.medium", "t3a.medium"]
+      capacity_type  = "SPOT"
+
+      labels = {
+        Environment = "production"
+        Workload    = "products-api"
+      }
+    }
+  }
+
+  # Configuracion de accesos y seguridad
+  manage_aws_auth_configmap = true
+
+  tags = {
+    Environment = "production"
+    Terraform   = "true"
+  }
+}
