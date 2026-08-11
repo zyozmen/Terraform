@@ -66,7 +66,12 @@ pipeline {
 
         stage('Approval Gate (Production)') {
             when {
-                branch 'main'
+                expression {
+                    env.BRANCH_NAME == 'main' ||
+                    env.GIT_BRANCH == 'main' ||
+                    env.GIT_BRANCH == 'origin/main' ||
+                    env.GIT_BRANCH == 'refs/heads/main'
+                }
             }
             steps {
                 script {
@@ -86,7 +91,12 @@ pipeline {
 
         stage('Terraform Apply') {
             when {
-                branch 'main'
+                expression {
+                    env.BRANCH_NAME == 'main' ||
+                    env.GIT_BRANCH == 'main' ||
+                    env.GIT_BRANCH == 'origin/main' ||
+                    env.GIT_BRANCH == 'refs/heads/main'
+                }
             }
             steps {
                 sh '''
