@@ -3,7 +3,7 @@ pipeline {
         docker {
             image 'hashicorp/terraform:1.6.0'
             // El '--entrypoint=' es CRÍTICO para desactivar el entrypoint por defecto de la imagen de Hashicorp
-            args "--entrypoint='' -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
+            args "--entrypoint='' -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock -e aws-access-key-id=${aws-access-key-id} -e aws-secret-access-key=${aws-secret-access-key}"
         }
     }
 
@@ -26,8 +26,8 @@ pipeline {
                     terraform version
                     
                     echo "[INFO] Validando existencia de credenciales AWS en el entorno..."
-                    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-                        echo "[ERROR] Las variables AWS_ACCESS_KEY_ID o AWS_SECRET_ACCESS_KEY no están disponibles en este agente."
+                    if [ -z "$aws-access-key-id" ] || [ -z "$aws-secret-access-key" ]; then
+                        echo "[ERROR] Las variables aws-access-key-id o aws-secret-access-key no están disponibles en este agente."
                         exit 1
                     fi
                     echo "[INFO] Credenciales detectadas correctamente."

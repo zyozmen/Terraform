@@ -80,8 +80,8 @@ pipeline {
         stage('AWS ECR Login & Build') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'aws-access-key-id', variable: 'aws-access-key-id'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'aws-secret-access-key')
                 ]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
@@ -95,12 +95,12 @@ pipeline {
         stage('Terraform Provision & Deploy') {
             steps {
                 withCredentials([
-                    string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                    string(credentialsId: 'aws-access-key-id', variable: 'aws-access-key-id'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'aws-secret-access-key')
                 ]) {
                     sh """
-                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        export aws-access-key-id=${aws-access-key-id}
+                        export aws-secret-access-key=${aws-secret-access-key}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
 
                         if ! command -v terraform &> /dev/null; then
@@ -210,13 +210,13 @@ stage('Verify & Install Tools') {
 stage('Terraform Provision & Deploy') {
     steps {
         withCredentials([
-            string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'),
-            string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+            string(credentialsId: 'aws-access-key-id', variable: 'aws-access-key-id'),
+            string(credentialsId: 'aws-secret-access-key', variable: 'aws-secret-access-key')
         ]) {
             sh '''
                 export PATH="${WORKSPACE}/.bin:${PATH}"
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                export aws-access-key-id=${aws-access-key-id}
+                export aws-secret-access-key=${aws-secret-access-key}
                 export AWS_DEFAULT_REGION=${AWS_REGION}
 
                 BUCKET_NAME="terraform-state-505231787824"
