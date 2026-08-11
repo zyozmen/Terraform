@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'hashicorp/terraform:1.15.8'
+            image 'hashicorp/terraform:1.7.5'
             args "--entrypoint='' -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock"
         }
     }
@@ -41,7 +41,7 @@ pipeline {
             steps {
                 sh '''
                     echo "[INFO] Inicializando backend remoto..."
-                    terraform init -input=false -migrate-state
+                    terraform init -input=false -reconfigure -backend-config="bucket=terraform-remote-state-jenkins" -backend-config="key=terraform.tfstate" -backend-config="region=us-east-2"
                 '''
             }
         }
