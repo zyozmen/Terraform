@@ -42,6 +42,9 @@ pipeline {
                 sh '''
                     echo "[INFO] Inicializando backend remoto..."
                     terraform init -input=false -reconfigure
+                '''
+            }
+        }
 
         stage('Terraform Validate') {
             steps {
