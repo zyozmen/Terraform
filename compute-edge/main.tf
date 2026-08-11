@@ -54,14 +54,14 @@ module "eks" {
   vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
   subnet_ids = data.terraform_remote_state.networking.outputs.private_subnet_ids
 
-  # Configuracion de Nodos de Worker (Optimizacion de costos con Instancias Spot)
+  # Un unico worker Spot para cargas de desarrollo de bajo costo.
   eks_managed_node_groups = {
-    spot_nodes = {
+    micro_node = {
       min_size     = 1
-      max_size     = 3
-      desired_size = 2
+      max_size     = 1
+      desired_size = 1
 
-      instance_types = ["t3.medium", "t3a.medium"]
+      instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
 
       labels = {
