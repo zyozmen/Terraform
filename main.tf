@@ -23,7 +23,7 @@ provider "aws" {
 # 1. Red y Seguridad (Grupo de Seguridad para habilitar acceso a Spring Boot y SSH)
 resource "aws_security_group" "permitir_trafico" {
   name        = "permitir_servicios"
-  description = "Habilitar puertos basicos para practica"
+  description = "Habilitar puertos basicos para funcionamiento de la aplicacion"
 
   # Puerto para SSH (Tu máquina)
   ingress {
@@ -52,8 +52,8 @@ resource "aws_security_group" "permitir_trafico" {
 
 # 2. Servidor EC2 para el Backend de Products-API
 resource "aws_instance" "backend_server" {
-  ami           = "ami-0c7217cdde317cfec" # Ubuntu Server 22.04 LTS en us-east-2. Confirma este ID en tu region.
-  instance_type = "t3.micro"               # Cubierto por la capa gratuita (o t2.micro si us-east-1)
+  ami           = "ami-0c7217cdde317cfec" # Ubuntu Server 22.04 LTS en us-east-2. 
+  instance_type = "t3.micro"               
 
   vpc_security_group_ids = [aws_security_group.permitir_trafico.id]
 
@@ -64,7 +64,7 @@ resource "aws_instance" "backend_server" {
 
 # 3. Bucket de S3 para el Frontend (React App estatica)
 resource "aws_s3_bucket" "frontend_bucket" {
-  bucket        = "mi-practica-react-unique-name-98765" # Modifica esto para que sea unico en el mundo
+  bucket        = "products-growshop-bucket-11082026"
   force_destroy = true # IMPORTANTE: Permite que Terraform borre todo el contenido al destruir
 }
 
