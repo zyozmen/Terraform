@@ -2,49 +2,62 @@ pipeline {
     agent {
         docker {
             image 'hashicorp/terraform:1.6.0'
-            // Se pasan credenciales de AWS y montajes necesarios
-            args '-u 0:0 --entrypoint="" -v /var/run/docker.sock:/var/run/docker.sock'
+            args '-u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
         }
     }
 
     options {
         buildDiscarder(logRotator(numToKeepStr: '10'))
-        disableConcurrentBuilds() // Evita race conditions sobre el estado de Terraform
+        disableConcurrentBuilds()
         timeout(time: 1, unit: 'HOURS')
+        ansiColor('xterm')
     }
 
     environment {
-
-        AWS_ACCESS_KEY_ID     = "${env.AWS_CREDENTIALS_USR}"
-        AWS_SECRET_ACCESS_KEY = "${env.AWS_CREDENTIALS_PSW}"
-        AWS_DEFAULT_REGION    = 'us-east-2'
-        TF_IN_AUTOMATION      = 'true'
+        AWS_DEFAULT_REGION = 'us-east-1'
+        TF_IN_AUTOMATION   = 'true'
     }
 
     stages {
-        stage('Validate Environment') {
+        stage('Validate AWS Credentials & Terraform') {
             steps {
-                sh '''
-                    echo "[INFO] Verificando versión de herramientas..."
-                    terraform version
-                '''
+                withCredentials([
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh '''
+                        echo "[INFO] Verificando versión de Terraform..."
+                        terraform version
+                        
+                        echo "[INFO] Validando existencia de credenciales AWS..."
+                        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+                            echo "[ERROR] Las credenciales AWS_ACCESS_KEY_ID o AWS_SECRET_ACCESS_KEY están vacías."
+                            exit 1
+                        fi
+                        echo "[INFO] Credenciales detectadas en el entorno."
+                    '''
+                }
             }
         }
 
         stage('Terraform Init') {
             steps {
-                // El backend remoto garantiza que la primera vez inicialice y las siguientes re-use el estado
-                sh '''
-                    echo "[INFO] Inicializando backend remoto..."
-                    terraform init -input=false
-                '''
+                withCredentials([
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh '''
+                        echo "[INFO] Inicializando backend remoto en S3..."
+                        terraform init -input=false
+                    '''
+                }
             }
         }
 
-        stage('Terraform Validate & Lint') {
+        stage('Terraform Validate') {
             steps {
                 sh '''
-                    echo "[INFO] Validando sintaxis de código..."
+                    echo "[INFO] Validando código de Terraform..."
                     terraform validate
                 '''
             }
@@ -52,11 +65,15 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                // Genera un plan ejecutable y lo guarda en un archivo binario para garantizar idempotencia
-                sh '''
-                    echo "[INFO] Generando plan de ejecución..."
-                    terraform plan -input=false -out=tfplan
-                '''
+                withCredentials([
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh '''
+                        echo "[INFO] Generando plan de ejecución..."
+                        terraform plan -input=false -out=tfplan
+                    '''
+                }
             }
         }
 
@@ -65,17 +82,16 @@ pipeline {
                 branch 'main'
             }
             steps {
-                // Pausa el pipeline esperando confirmación manual antes de modificar producción
                 script {
                     def userInput = input(
                         id: 'userInput',
-                        message: '¿Aprobar cambios de Infraestructura en AWS?',
+                        message: '¿Aprobar despliegue de Infraestructura en AWS?',
                         parameters: [
-                            choice(name: 'ACTION', choices: ['Proceed', 'Abort'], description: 'Confirmar despliegue')
+                            choice(name: 'ACTION', choices: ['Proceed', 'Abort'], description: 'Confirmar aplicación de cambios')
                         ]
                     )
                     if (userInput == 'Abort') {
-                        error("Despliegue abortado por el usuario.")
+                        error("Despliegue abortado manualmente.")
                     }
                 }
             }
@@ -86,27 +102,28 @@ pipeline {
                 branch 'main'
             }
             steps {
-                // Aplica ÚNICAMENTE el plan previamente calculado
-                sh '''
-                    echo "[INFO] Aplicando cambios en infraestructura..."
-                    terraform apply -input=false tfplan
-                '''
+                withCredentials([
+                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    sh '''
+                        echo "[INFO] Aplicando cambios en producción..."
+                        terraform apply -input=false tfplan
+                    '''
+                }
             }
         }
     }
 
     post {
         always {
-            // node('') corre en el host Jenkins donde el workspace aún existe tras destruir el contenedor
-            node('') {
-                sh 'rm -f tfplan .terraform/environment'
-            }
+            sh 'rm -rf tfplan .terraform/environment'
         }
         success {
-            echo "[ÉXITO] Infraestructura actualizada correctamente."
+            echo "[ÉXITO] Infraestructura desplegada/actualizada correctamente."
         }
         failure {
-            echo "[ERROR] Falló la ejecución de Terraform. Revisa los logs."
+            echo "[ERROR] Falló la ejecución del pipeline de infraestructura."
         }
     }
 }
