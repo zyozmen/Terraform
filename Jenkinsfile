@@ -41,7 +41,7 @@ pipeline {
             steps {
                 sh '''
                     echo "[INFO] Inicializando backend remoto..."
-                    terraform init -input=false
+                    terraform init -input=false -migrate-state
                 '''
             }
         }
