@@ -41,10 +41,7 @@ pipeline {
             steps {
                 sh '''
                     echo "[INFO] Inicializando backend remoto..."
-                    terraform init -input=false -reconfigure -backend-config="bucket=terraform-remote-state-jenkins" -backend-config="key=terraform.tfstate" -backend-config="region=us-east-2"
-                '''
-            }
-        }
+                    terraform init -input=false -reconfigure
 
         stage('Terraform Validate') {
             steps {
