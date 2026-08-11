@@ -79,6 +79,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
   }
 }
 
+resource "aws_instance" "backend_server" {
+  ami           = data.aws_ami.amazon_linux_2023.id
+  instance_type = "t3.micro"
+  subnet_id     = aws_subnet.public[0].id
+
+  tags = {
+    Name = "backend-server-prod"
+  }
+}
+
 data "aws_iam_policy_document" "access_logs_bucket" {
   statement {
     sid    = "DenyInsecureTransport"
