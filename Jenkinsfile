@@ -2,7 +2,8 @@ pipeline {
     agent {
         docker {
             image 'hashicorp/terraform:1.6.0'
-            args '-u 0:0 -v /var/run/docker.sock:/var/run/docker.sock'
+            // El '--entrypoint=' es CRÍTICO para desactivar el entrypoint por defecto de la imagen de Hashicorp
+            args "--entrypoint='' -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}"
         }
     }
 
@@ -20,36 +21,26 @@ pipeline {
     stages {
         stage('Validate AWS Credentials & Terraform') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh '''
-                        echo "[INFO] Verificando versión de Terraform..."
-                        terraform version
-                        
-                        echo "[INFO] Validando existencia de credenciales AWS..."
-                        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-                            echo "[ERROR] Las credenciales AWS_ACCESS_KEY_ID o AWS_SECRET_ACCESS_KEY están vacías."
-                            exit 1
-                        fi
-                        echo "[INFO] Credenciales detectadas en el entorno."
-                    '''
-                }
+                sh '''
+                    echo "[INFO] Verificando versión de Terraform..."
+                    terraform version
+                    
+                    echo "[INFO] Validando existencia de credenciales AWS en el entorno..."
+                    if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+                        echo "[ERROR] Las variables AWS_ACCESS_KEY_ID o AWS_SECRET_ACCESS_KEY no están disponibles en este agente."
+                        exit 1
+                    fi
+                    echo "[INFO] Credenciales detectadas correctamente."
+                '''
             }
         }
 
         stage('Terraform Init') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh '''
-                        echo "[INFO] Inicializando backend remoto en S3..."
-                        terraform init -input=false
-                    '''
-                }
+                sh '''
+                    echo "[INFO] Inicializando backend remoto en S3..."
+                    terraform init -input=false
+                '''
             }
         }
 
@@ -64,15 +55,10 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh '''
-                        echo "[INFO] Generando plan de ejecución..."
-                        terraform plan -input=false -out=tfplan
-                    '''
-                }
+                sh '''
+                    echo "[INFO] Generando plan de ejecución..."
+                    terraform plan -input=false -out=tfplan
+                '''
             }
         }
 
@@ -101,15 +87,10 @@ pipeline {
                 branch 'main'
             }
             steps {
-                withCredentials([
-                    string(credentialsId: 'AWS_ACCESS_KEY_ID_SECRET', variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'AWS_SECRET_ACCESS_KEY_SECRET', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    sh '''
-                        echo "[INFO] Aplicando cambios en producción..."
-                        terraform apply -input=false tfplan
-                    '''
-                }
+                sh '''
+                    echo "[INFO] Aplicando cambios en producción..."
+                    terraform apply -input=false tfplan
+                '''
             }
         }
     }
