@@ -12,8 +12,8 @@ variable "image_tag" {
 
 variable "cluster_version" {
   type        = string
-  default     = "1.34"
-  description = "Version de Kubernetes para el cluster EKS. Se usa 1.29 por compatibilidad con AMI de EKS en produccion."
+  default     = "1.36"
+  description = "Version recomendada por Amazon EKS para crear o actualizar el cluster. Se mantiene en la ultima version soportada para evitar desactualizacion y riesgo operativo."
 }
 
 variable "vpc_id" {
