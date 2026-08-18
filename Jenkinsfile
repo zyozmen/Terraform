@@ -1,7 +1,7 @@
 pipeline {
     agent {
         docker {
-            image 'hashicorp/terraform:1.7.5'
+            image 'hashicorp/terraform:1.15.8'
             args "--entrypoint='' -u 0:0 -v /var/run/docker.sock:/var/run/docker.sock"
         }
     }

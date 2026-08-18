@@ -44,12 +44,14 @@ resource "aws_ecr_lifecycle_policy" "products_service_policy" {
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 19.15"
+  version = "~> 20.0"
 
   cluster_name    = "products-cluster"
   cluster_version = var.cluster_version
 
   cluster_endpoint_public_access = true
+  authentication_mode            = "API"
+  enable_cluster_creator_admin_permissions = true
 
   vpc_id     = var.vpc_id
   subnet_ids = var.private_subnet_ids
@@ -71,9 +73,6 @@ module "eks" {
       }
     }
   }
-
-  # Configuracion de accesos y seguridad
-  manage_aws_auth_configmap = true
 
   tags = {
     Environment = "production"
