@@ -12,7 +12,7 @@ variable "image_tag" {
 
 variable "cluster_version" {
   type        = string
-  default     = "1.29"
+  default     = "1.34"
   description = "Version de Kubernetes para el cluster EKS. Se usa 1.29 por compatibilidad con AMI de EKS en produccion."
 }
 
