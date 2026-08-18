@@ -66,6 +66,16 @@ pipeline {
                         --key-schema AttributeName=LockID,KeyType=HASH \
                         --billing-mode PAY_PER_REQUEST \
                         --region "$AWS_DEFAULT_REGION"
+
+                    echo "[INFO] Asegurando log group idempotente de EKS..."
+                    aws logs describe-log-groups \
+                        --log-group-name-prefix "/aws/eks/products-cluster" \
+                        --region "$AWS_DEFAULT_REGION" \
+                        --query 'logGroups[?logGroupName==`/aws/eks/products-cluster/cluster`].logGroupName' \
+                        --output text | grep -q "/aws/eks/products-cluster/cluster" || \
+                    aws logs create-log-group \
+                        --log-group-name /aws/eks/products-cluster/cluster \
+                        --region "$AWS_DEFAULT_REGION"
                 '''
             }
         }
