@@ -51,8 +51,8 @@ module "eks" {
 
   cluster_endpoint_public_access = true
 
-  vpc_id     = data.terraform_remote_state.networking.outputs.vpc_id
-  subnet_ids = data.terraform_remote_state.networking.outputs.private_subnet_ids
+  vpc_id     = var.vpc_id
+  subnet_ids = var.private_subnet_ids
 
   # Un unico worker Spot para cargas de desarrollo de bajo costo.
   eks_managed_node_groups = {

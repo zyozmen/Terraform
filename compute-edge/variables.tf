@@ -15,3 +15,13 @@ variable "cluster_version" {
   default     = "1.30"
   description = "Version de Kubernetes para el cluster EKS"
 }
+
+variable "vpc_id" {
+  type        = string
+  description = "ID de la VPC donde se creara el cluster EKS"
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
+  description = "IDs de las subredes privadas para los nodos del cluster"
+}

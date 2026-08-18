@@ -20,6 +20,18 @@ provider "aws" {
   region = var.aws_region
 }
 
+module "networking" {
+  source    = "./networking-core"
+  aws_region = var.aws_region
+}
+
+module "compute" {
+  source    = "./compute-edge"
+  aws_region = var.aws_region
+  vpc_id = module.networking.vpc_id
+  private_subnet_ids = module.networking.private_subnet_ids
+}
+
 # Bucket de S3 para el frontend estatico.
 resource "aws_s3_bucket" "frontend_bucket" {
   bucket        = var.frontend_bucket_name
