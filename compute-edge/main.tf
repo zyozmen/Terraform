@@ -61,6 +61,7 @@ module "eks" {
       max_size     = 1
       desired_size = 1
 
+      ami_type      = "AL2_x86_64"
       instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
 
