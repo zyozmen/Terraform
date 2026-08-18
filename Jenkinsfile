@@ -88,8 +88,26 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 sh '''
-                    echo "[INFO] Inicializando backend remoto..."
-                    terraform init -input=false -reconfigure
+                    set -e
+                    set -o pipefail
+
+                    echo "[INFO] Limpiando cache local de providers para evitar inconsistencias de lock..."
+                    rm -rf .terraform
+
+                    for attempt in 1 2 3; do
+                        echo "[INFO] Intento de inicializacion Terraform $attempt/3..."
+                        if terraform init -input=false -reconfigure; then
+                            break
+                        fi
+
+                        if [ "$attempt" -eq 3 ]; then
+                            echo "[ERROR] terraform init falló tras 3 intentos."
+                            exit 1
+                        fi
+
+                        echo "[WARN] terraform init falló; reintentando en 10 segundos..."
+                        sleep 10
+                    done
                 '''
             }
         }
@@ -109,7 +127,7 @@ pipeline {
                         --query 'logGroups[?logGroupName==`/aws/eks/products-cluster/cluster`].logGroupName' \
                         --output text || true)
 
-                    if [ -n "$EXISTING_LOG_GROUP" ]; then
+                    if [ -n "$EXISTING_LOG_GROUP" ] && ! terraform state list | grep -q "module.compute.module.eks.aws_cloudwatch_log_group.this\[0\]"; then
                         echo "[INFO] Importando log group existente al state de Terraform..."
                         terraform import 'module.compute.module.eks.aws_cloudwatch_log_group.this[0]' "$LOG_GROUP" || true
                     fi
@@ -120,9 +138,15 @@ pipeline {
                         --output text || true)
 
                     if [ -n "$KMS_KEY_ID" ]; then
-                        echo "[INFO] Importando KMS key existente del cluster al state de Terraform..."
-                        terraform import 'module.compute.module.eks.module.kms.aws_kms_key.this[0]' "$KMS_KEY_ID" || true
-                        terraform import 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster' || true
+                        if ! terraform state list | grep -q "module.compute.module.eks.module.kms.aws_kms_key.this\[0\]"; then
+                            echo "[INFO] Importando KMS key existente del cluster al state de Terraform..."
+                            terraform import 'module.compute.module.eks.module.kms.aws_kms_key.this[0]' "$KMS_KEY_ID" || true
+                        fi
+
+                        if ! terraform state list | grep -q "module.compute.module.eks.module.kms.aws_kms_alias.this\[\"cluster\"\]"; then
+                            echo "[INFO] Importando alias KMS existente del cluster al state de Terraform..."
+                            terraform import 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster' || true
+                        fi
                     fi
                 '''
             }
