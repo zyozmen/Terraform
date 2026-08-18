@@ -44,13 +44,11 @@ pipeline {
 
                     echo "[INFO] Verificando AWS CLI..."
                     if ! command -v aws >/dev/null 2>&1; then
-                        echo "[INFO] Instalando AWS CLI v2..."
-                        apk add --no-cache curl unzip
-                        curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
-                        unzip -q /tmp/awscliv2.zip -d /tmp
-                        /tmp/aws/install --update
-                        rm -rf /tmp/aws /tmp/awscliv2.zip
+                        echo "[INFO] Instalando AWS CLI desde repositorios de Alpine..."
+                        apk add --no-cache aws-cli
                     fi
+
+                    aws --version
 
                     echo "[INFO] Verificando backend S3 y bloqueo de Terraform..."
                     aws s3api head-bucket --bucket terraform-state-505231787824 --region "$AWS_DEFAULT_REGION" 2>/dev/null || \
