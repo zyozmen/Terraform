@@ -41,6 +41,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
+                    set -o pipefail
 
                     echo "[INFO] Verificando AWS CLI..."
                     if ! command -v aws >/dev/null 2>&1; then
@@ -66,14 +67,14 @@ pipeline {
                         --region "$AWS_DEFAULT_REGION"
 
                     echo "[INFO] Asegurando log group idempotente de EKS..."
-                    aws logs describe-log-groups \
-                        --log-group-name-prefix "/aws/eks/products-cluster" \
-                        --region "$AWS_DEFAULT_REGION" \
-                        --query 'logGroups[?logGroupName==`/aws/eks/products-cluster/cluster`].logGroupName' \
-                        --output text | grep -q "/aws/eks/products-cluster/cluster" || \
-                    aws logs create-log-group \
-                        --log-group-name /aws/eks/products-cluster/cluster \
-                        --region "$AWS_DEFAULT_REGION"
+                    LOG_GROUP="/aws/eks/products-cluster/cluster"
+                    if aws logs describe-log-groups --log-group-name-prefix "/aws/eks/products-cluster" --region "$AWS_DEFAULT_REGION" --output json | python -c 'import sys, json; data=json.load(sys.stdin); names=[g["logGroupName"] for g in data.get("logGroups", [])]; print("\n".join(names));' | grep -Fxq "$LOG_GROUP"; then
+                        echo "[INFO] El log group ya existe. Importandolo al estado de Terraform."
+                        terraform import 'module.compute.module.eks.aws_cloudwatch_log_group.this[0]' "$LOG_GROUP" || true
+                    else
+                        echo "[INFO] El log group no existe. Creandolo de forma idempotente."
+                        aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$AWS_DEFAULT_REGION" || true
+                    fi
                 '''
             }
         }
