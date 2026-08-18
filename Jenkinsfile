@@ -26,13 +26,46 @@ pipeline {
                 sh '''
                     echo "[INFO] Verificando versión de Terraform..."
                     terraform version
-                    
+
                     echo "[INFO] Validando existencia de credenciales AWS..."
                     if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
                         echo "[ERROR] Las credenciales AWS no fueron inyectadas en el entorno global."
                         exit 1
                     fi
                     echo "[INFO] Credenciales detectadas exitosamente en el entorno."
+                '''
+            }
+        }
+
+        stage('Prepare AWS CLI & Terraform Backend') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "[INFO] Verificando AWS CLI..."
+                    if ! command -v aws >/dev/null 2>&1; then
+                        echo "[INFO] Instalando AWS CLI v2..."
+                        apk add --no-cache curl unzip
+                        curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+                        unzip -q /tmp/awscliv2.zip -d /tmp
+                        /tmp/aws/install --update
+                        rm -rf /tmp/aws /tmp/awscliv2.zip
+                    fi
+
+                    echo "[INFO] Verificando backend S3 y bloqueo de Terraform..."
+                    aws s3api head-bucket --bucket terraform-state-505231787824 --region "$AWS_DEFAULT_REGION" 2>/dev/null || \
+                    aws s3api create-bucket \
+                        --bucket terraform-state-505231787824 \
+                        --region "$AWS_DEFAULT_REGION" \
+                        --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION"
+
+                    aws dynamodb describe-table --table-name terraform-locks --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1 || \
+                    aws dynamodb create-table \
+                        --table-name terraform-locks \
+                        --attribute-definitions AttributeName=LockID,AttributeType=S \
+                        --key-schema AttributeName=LockID,KeyType=HASH \
+                        --billing-mode PAY_PER_REQUEST \
+                        --region "$AWS_DEFAULT_REGION"
                 '''
             }
         }
@@ -65,14 +98,6 @@ pipeline {
         }
 
         stage('Approval Gate (Production)') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'main' ||
-                    env.GIT_BRANCH == 'main' ||
-                    env.GIT_BRANCH == 'origin/main' ||
-                    env.GIT_BRANCH == 'refs/heads/main'
-                }
-            }
             steps {
                 script {
                     def userInput = input(
@@ -90,14 +115,6 @@ pipeline {
         }
 
         stage('Terraform Apply') {
-            when {
-                expression {
-                    env.BRANCH_NAME == 'main' ||
-                    env.GIT_BRANCH == 'main' ||
-                    env.GIT_BRANCH == 'origin/main' ||
-                    env.GIT_BRANCH == 'refs/heads/main'
-                }
-            }
             steps {
                 sh '''
                     echo "[INFO] Aplicando infraestructura..."
