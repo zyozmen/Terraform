@@ -5,7 +5,7 @@
 # ============================================================
 
 terraform {
-  required_version = ">= 1.5.0"
+  required_version = ">= 1.10.0"
 
   required_providers {
     aws = {
@@ -15,10 +15,10 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "terraform-state-505231787824"
-    key            = "infra-aws/data-persistence/terraform.tfstate"
-    region         = "us-east-2"
-    dynamodb_table = "terraform-locks"
+    bucket       = "terraform-state-505231787824"
+    key          = "infra-aws/data-persistence/terraform.tfstate"
+    region       = "us-east-2"
+    use_lockfile = true
   }
 }
 

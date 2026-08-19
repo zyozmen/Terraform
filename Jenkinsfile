@@ -51,20 +51,12 @@ pipeline {
 
                     aws --version
 
-                    echo "[INFO] Verificando backend S3 y bloqueo de Terraform..."
+                    echo "[INFO] Verificando backend S3 y bloqueo por archivo..."
                     aws s3api head-bucket --bucket terraform-state-505231787824 --region "$AWS_DEFAULT_REGION" 2>/dev/null || \
                     aws s3api create-bucket \
                         --bucket terraform-state-505231787824 \
                         --region "$AWS_DEFAULT_REGION" \
                         --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION"
-
-                    aws dynamodb describe-table --table-name terraform-locks --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1 || \
-                    aws dynamodb create-table \
-                        --table-name terraform-locks \
-                        --attribute-definitions AttributeName=LockID,AttributeType=S \
-                        --key-schema AttributeName=LockID,KeyType=HASH \
-                        --billing-mode PAY_PER_REQUEST \
-                        --region "$AWS_DEFAULT_REGION"
 
                     echo "[INFO] Asegurando log group idempotente de EKS..."
                     LOG_GROUP="/aws/eks/products-cluster/cluster"
@@ -147,6 +139,12 @@ pipeline {
                             echo "[INFO] Importando alias KMS existente del cluster al state de Terraform..."
                             terraform import 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster' || true
                         fi
+                    fi
+
+                    if ! terraform state list | grep -Fq 'kubernetes_namespace_v1.products'; then
+                        echo "[INFO] Importando namespace products si ya existe..."
+                        terraform import 'kubernetes_namespace_v1.products' 'products' || \
+                            echo "[INFO] El namespace products aun no existe; Terraform lo creara."
                     fi
                 '''
             }
