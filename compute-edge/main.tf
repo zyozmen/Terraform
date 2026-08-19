@@ -59,9 +59,9 @@ module "eks" {
   # Un unico worker Spot para cargas de desarrollo de bajo costo.
   eks_managed_node_groups = {
     micro_node = {
-      min_size     = 1
-      max_size     = 1
-      desired_size = 1
+      min_size     = 2
+      max_size     = 2
+      desired_size = 2
 
       instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
