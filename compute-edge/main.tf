@@ -61,7 +61,7 @@ module "eks" {
     micro_node = {
       min_size     = 2
       max_size     = 2
-      desired_size = 4
+      desired_size = 2
 
       instance_types = ["t3.micro"]
       capacity_type  = "SPOT"
