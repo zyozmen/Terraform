@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "~> 3.0"
+    }
   }
 
   backend "s3" {
@@ -20,16 +24,61 @@ provider "aws" {
   region = var.aws_region
 }
 
+data "aws_eks_cluster_auth" "products" {
+  name = module.compute.cluster_name
+}
+
+provider "kubernetes" {
+  host                   = module.compute.cluster_endpoint
+  cluster_ca_certificate = base64decode(module.compute.cluster_certificate_authority_data)
+  token                  = data.aws_eks_cluster_auth.products.token
+}
+
 module "networking" {
-  source    = "./networking-core"
+  source     = "./networking-core"
   aws_region = var.aws_region
 }
 
 module "compute" {
-  source    = "./compute-edge"
-  aws_region = var.aws_region
-  vpc_id = module.networking.vpc_id
+  source             = "./compute-edge"
+  aws_region         = var.aws_region
+  vpc_id             = module.networking.vpc_id
   private_subnet_ids = module.networking.private_subnet_ids
+}
+
+resource "kubernetes_namespace_v1" "products" {
+  metadata {
+    name = "products"
+  }
+
+  depends_on = [module.compute]
+}
+
+resource "kubernetes_service_v1" "backend" {
+  metadata {
+    name      = "backend-service"
+    namespace = kubernetes_namespace_v1.products.metadata[0].name
+    annotations = {
+      "service.beta.kubernetes.io/aws-load-balancer-scheme" = "internet-facing"
+      "service.beta.kubernetes.io/aws-load-balancer-type"   = "nlb"
+    }
+  }
+
+  spec {
+    selector = {
+      app = "backend-products-api"
+    }
+
+    port {
+      name        = "http"
+      port        = 80
+      target_port = "http"
+    }
+
+    type = "LoadBalancer"
+  }
+
+  depends_on = [kubernetes_namespace_v1.products]
 }
 
 # Bucket de S3 para el frontend estatico.
@@ -239,4 +288,9 @@ resource "aws_s3_bucket_policy" "frontend_bucket" {
 output "url_frontend" {
   value       = "https://${aws_cloudfront_distribution.frontend.domain_name}"
   description = "HTTPS URL for the frontend delivered through CloudFront."
+}
+
+output "url_products_api" {
+  description = "Hostname publico del Load Balancer de la API Products"
+  value       = try("http://${kubernetes_service_v1.backend.status[0].load_balancer[0].ingress[0].hostname}", null)
 }

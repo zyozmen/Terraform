@@ -3,6 +3,11 @@ output "cluster_endpoint" {
   value       = module.eks.cluster_endpoint
 }
 
+output "cluster_certificate_authority_data" {
+  description = "Certificado CA del cluster EKS para el provider Kubernetes"
+  value       = module.eks.cluster_certificate_authority_data
+}
+
 output "cluster_name" {
   description = "Nombre oficial del cluster EKS para Kubeconfig"
   value       = module.eks.cluster_name
