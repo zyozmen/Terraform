@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "frontend_bucket_name" {
   type        = string
   description = "Globally unique S3 bucket name for the frontend."
-  default     = "products-growshop-bucket-11082026"
+  default     = "products-growshop-bucket"
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.frontend_bucket_name))
@@ -18,7 +18,7 @@ variable "frontend_bucket_name" {
 variable "access_logs_bucket_name" {
   type        = string
   description = "Globally unique S3 bucket name for frontend access logs."
-  default     = "products-growshop-access-logs-11082026"
+  default     = "products-growshop-access-logs"
 
   validation {
     condition     = can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.access_logs_bucket_name))

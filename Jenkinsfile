@@ -59,7 +59,7 @@ pipeline {
                     echo "[INFO] Verificando backend S3 y bloqueo por archivo..."
                     aws s3api head-bucket --bucket terraform-state-505231787824 --region "$AWS_DEFAULT_REGION" 2>/dev/null || \
                     aws s3api create-bucket \
-                        --bucket terraform-state-505231787824 \
+                        --bucket products-app-terraform-state \
                         --region "$AWS_DEFAULT_REGION" \
                         --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION"
 

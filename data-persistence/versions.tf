@@ -15,7 +15,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "terraform-state-505231787824"
+    bucket       = "products-api-terraform-state"
     key          = "infra-aws/data-persistence/terraform.tfstate"
     region       = "us-east-2"
     use_lockfile = true

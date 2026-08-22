@@ -12,7 +12,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "terraform-state-505231787824"
+    bucket       = "products-app-terraform-state"
     key          = "frontend/products-app/terraform.tfstate"
     region       = "us-east-2"
     use_lockfile = true
@@ -54,9 +54,9 @@ resource "kubernetes_namespace_v1" "products" {
   depends_on = [module.compute]
 }
 
-resource "kubernetes_service_v1" "backend" {
+resource "kubernetes_service_v1" "products-api" {
   metadata {
-    name      = "backend-service"
+    name      = "products-api-service"
     namespace = kubernetes_namespace_v1.products.metadata[0].name
     annotations = {
       "service.beta.kubernetes.io/aws-load-balancer-scheme" = "internet-facing"
