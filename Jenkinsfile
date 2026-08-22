@@ -49,6 +49,11 @@ pipeline {
                         apk add --no-cache aws-cli
                     fi
 
+                    if ! command -v kubectl >/dev/null 2>&1; then
+                        echo "[INFO] Instalando kubectl desde repositorios de Alpine..."
+                        apk add --no-cache kubectl
+                    fi
+
                     aws --version
 
                     echo "[INFO] Verificando backend S3 y bloqueo por archivo..."
@@ -58,21 +63,6 @@ pipeline {
                         --region "$AWS_DEFAULT_REGION" \
                         --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION"
 
-                    echo "[INFO] Asegurando log group idempotente de EKS..."
-                    LOG_GROUP="/aws/eks/products-cluster/cluster"
-                    EXISTING_LOG_GROUP=$(aws logs describe-log-groups \
-                        --log-group-name-prefix "/aws/eks/products-cluster" \
-                        --region "$AWS_DEFAULT_REGION" \
-                        --query 'logGroups[?logGroupName==`/aws/eks/products-cluster/cluster`].logGroupName' \
-                        --output text || true)
-
-                    if [ -n "$EXISTING_LOG_GROUP" ]; then
-                        echo "[INFO] El log group ya existe. Importandolo al estado de Terraform."
-                        terraform import 'module.compute.module.eks.aws_cloudwatch_log_group.this[0]' "$LOG_GROUP" || true
-                    else
-                        echo "[INFO] El log group no existe. Creandolo de forma idempotente."
-                        aws logs create-log-group --log-group-name "$LOG_GROUP" --region "$AWS_DEFAULT_REGION" || true
-                    fi
                 '''
             }
         }
@@ -104,13 +94,56 @@ pipeline {
             }
         }
 
-        stage('Import Existing EKS Resources') {
+        stage('Import Existing Resources') {
             steps {
                 sh '''
                     set -e
                     set -o pipefail
 
-                    echo "[INFO] Verificando recursos EKS ya existentes para evitar duplicados..."
+                    import_if_exists() {
+                        address="$1"
+                        resource_id="$2"
+                        if terraform state list | grep -Fqx "$address"; then
+                            echo "[INFO] $address ya esta en el state."
+                            return 0
+                        fi
+
+                        echo "[INFO] Importando $address ($resource_id)..."
+                        terraform import "$address" "$resource_id"
+                    }
+
+                    import_if_bucket_exists() {
+                        address="$1"
+                        bucket="$2"
+                        if aws s3api head-bucket --bucket "$bucket" --region "$AWS_DEFAULT_REGION" 2>/dev/null; then
+                            import_if_exists "$address" "$bucket"
+                        else
+                            echo "[INFO] s3://$bucket no existe; Terraform lo creara."
+                        fi
+                    }
+
+                    echo "[INFO] Adoptando recursos existentes antes del plan..."
+
+                    import_if_bucket_exists 'aws_s3_bucket.frontend_bucket' "${TF_VAR_frontend_bucket_name:-products-growshop-bucket-11082026}"
+                    import_if_bucket_exists 'aws_s3_bucket.access_logs' "${TF_VAR_access_logs_bucket_name:-products-growshop-access-logs-11082026}"
+
+                    if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        import_if_exists 'module.compute.module.eks.aws_eks_cluster.this[0]' 'products-cluster'
+
+                        aws eks update-kubeconfig --region "$AWS_DEFAULT_REGION" --name products-cluster >/dev/null
+
+                        if kubectl get namespace products >/dev/null 2>&1 && ! terraform state list | grep -Fq 'kubernetes_namespace_v1.products'; then
+                            echo "[INFO] Importando namespace products existente..."
+                            terraform import 'kubernetes_namespace_v1.products' 'products'
+                        fi
+
+                        if kubectl get service backend-service --namespace products >/dev/null 2>&1 && ! terraform state list | grep -Fq 'kubernetes_service_v1.backend'; then
+                            echo "[INFO] Importando service backend-service existente..."
+                            terraform import 'kubernetes_service_v1.backend' 'products/backend-service'
+                        fi
+                    else
+                        echo "[INFO] El cluster EKS no existe; Terraform lo creara."
+                    fi
 
                     LOG_GROUP="/aws/eks/products-cluster/cluster"
                     EXISTING_LOG_GROUP=$(aws logs describe-log-groups \
@@ -121,7 +154,7 @@ pipeline {
 
                     if [ -n "$EXISTING_LOG_GROUP" ] && ! terraform state list | grep -Fq "module.compute.module.eks.aws_cloudwatch_log_group.this[0]"; then
                         echo "[INFO] Importando log group existente al state de Terraform..."
-                        terraform import 'module.compute.module.eks.aws_cloudwatch_log_group.this[0]' "$LOG_GROUP" || true
+                        terraform import 'module.compute.module.eks.aws_cloudwatch_log_group.this[0]' "$LOG_GROUP"
                     fi
 
                     KMS_KEY_ID=$(aws kms list-aliases \
@@ -132,20 +165,15 @@ pipeline {
                     if [ -n "$KMS_KEY_ID" ]; then
                         if ! terraform state list | grep -Fq "module.compute.module.eks.module.kms.aws_kms_key.this[0]"; then
                             echo "[INFO] Importando KMS key existente del cluster al state de Terraform..."
-                            terraform import 'module.compute.module.eks.module.kms.aws_kms_key.this[0]' "$KMS_KEY_ID" || true
+                            terraform import 'module.compute.module.eks.module.kms.aws_kms_key.this[0]' "$KMS_KEY_ID"
                         fi
 
                         if ! terraform state list | grep -Fq 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]'; then
                             echo "[INFO] Importando alias KMS existente del cluster al state de Terraform..."
-                            terraform import 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster' || true
+                            terraform import 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster'
                         fi
                     fi
 
-                    if ! terraform state list | grep -Fq 'kubernetes_namespace_v1.products'; then
-                        echo "[INFO] Importando namespace products si ya existe..."
-                        terraform import 'kubernetes_namespace_v1.products' 'products' || \
-                            echo "[INFO] El namespace products aun no existe; Terraform lo creara."
-                    fi
                 '''
             }
         }
