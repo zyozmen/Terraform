@@ -225,22 +225,8 @@ pipeline {
                         aws eks update-kubeconfig --region "$AWS_DEFAULT_REGION" --name products-cluster >/dev/null
 
                     NLB_HOSTNAME=""
-                    for attempt in 1 2 3 4 5 6 7 8 9 10; do
-                        NLB_HOSTNAME=$(kubectl get svc backend-service --namespace products --output jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
-
-                        if [ -n "$NLB_HOSTNAME" ]; then
-                            break
-                        fi
-
-                        echo "[INFO] NLB aun pendiente (intento $attempt/10)..."
-                        sleep 30
-                    done
-
-                    if [ -z "$NLB_HOSTNAME" ]; then
-                        echo "[ERROR] No se obtuvo el hostname del NLB dentro del tiempo esperado."
-                        kubectl get svc backend-service --namespace products || true
-                        exit 1
-                    fi
+                    
+                    NLB_HOSTNAME=$(terraform output -raw url_products_api)
 
                     echo "[INFO] NLB_HOSTNAME=$NLB_HOSTNAME"
                     echo "[INFO] PRODUCTS_API_URL=http://$NLB_HOSTNAME"
