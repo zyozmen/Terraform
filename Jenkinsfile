@@ -186,34 +186,15 @@ pipeline {
         }
 
         stage('Terraform Apply') {
-            steps {
-                sh '''
-                    set -e
-                    set -o pipefail
-
-                    echo "[INFO] Ajustando capacidad del node group antes del apply..."
-                    aws eks update-nodegroup-config \\
-                        --cluster-name products-cluster \\
-                        --nodegroup-name micro_node-20260818212927761800000001 \\
-                        --scaling-config minSize=2,maxSize=2,desiredSize=2 \\
-                        --region "$AWS_DEFAULT_REGION" >/tmp/nodegroup-update.json
-
-                    NODEGROUP_UPDATE_ID=$(awk -F'"' '/updateId/ {print $4; exit}' /tmp/nodegroup-update.json)
-                    if [ -n "$NODEGROUP_UPDATE_ID" ]; then
-                        aws eks wait nodegroup-active \\
-                            --cluster-name products-cluster \\
-                            --nodegroup-name micro_node-20260818212927761800000001 \\
-                            --region "$AWS_DEFAULT_REGION"
-                    fi
-
-                    echo "[INFO] Regenerando plan despues del ajuste de capacidad..."
-                    terraform plan -input=false -out=tfplan
-
-                    echo "[INFO] Aplicando infraestructura..."
-                    terraform apply -input=false tfplan
-                '''
-            }
-        }
+    steps {
+        sh '''
+            set -e
+            set -o pipefail
+            echo '[INFO] Aplicando infraestructura con Terraform...'
+            terraform apply -input=false tfplan
+        '''
+    }
+}
 
         stage('Mostrar API Load Balancer') {
             steps {
