@@ -130,33 +130,13 @@ pipeline {
         }
 
         stage('Terraform Apply') {
-    steps {
-        sh '''
-            set -e
-            set -o pipefail
-            echo '[INFO] Aplicando infraestructura con Terraform...'
-            terraform apply -input=false tfplan
-        '''
-    }
-}
-
-        stage('Mostrar API Load Balancer') {
             steps {
                 sh '''
-                    set -e
-                    set -o pipefail
-
-                    echo "[INFO] Esperando hostname del NLB de Products..."
-                        aws eks update-kubeconfig --region "$AWS_DEFAULT_REGION" --name products-cluster >/dev/null
-
-                    NLB_HOSTNAME=""
-                    
-                    NLB_HOSTNAME=$(terraform output -raw url_products_api)
-
-                    echo "[INFO] NLB_HOSTNAME=$NLB_HOSTNAME"
-                    echo "[INFO] PRODUCTS_API_URL=http://$NLB_HOSTNAME"
-                    echo "[INFO] API_BASE_URL=http://$NLB_HOSTNAME/api"
-                '''
+                set -e
+                set -o pipefail
+                echo '[INFO] Aplicando infraestructura con Terraform...'
+                terraform apply -input=false tfplan
+            '''
             }
         }
     }
