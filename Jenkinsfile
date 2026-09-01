@@ -182,7 +182,7 @@ pipeline {
                         if aws kms list-aliases --region "$AWS_DEFAULT_REGION" \
                             --query "Aliases[?AliasName=='alias/eks/products-cluster'] | length(@)" \
                             --output text 2>/dev/null | grep -q '^1$'; then
-                            import_if_missing "module.compute.module.eks.module.kms.aws_kms_alias.this[\"cluster\"]" "alias/eks/products-cluster" "alias KMS EKS products-cluster"
+                            import_if_missing 'module.compute.module.eks.module.kms.aws_kms_alias.this["cluster"]' 'alias/eks/products-cluster' 'alias KMS EKS products-cluster'
                         fi
                     else
                         echo "[INFO] El cluster EKS products-cluster no existe. No se hace import de recursos del módulo EKS."
