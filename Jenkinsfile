@@ -117,6 +117,29 @@ pipeline {
             }
         }
 
+        stage('Check EKS Cluster State') {
+            steps {
+                script {
+                    env.EKS_CLUSTER_EXISTS = sh(
+                        script: '''
+                            if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                                echo "true"
+                            else
+                                echo "false"
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    if (env.EKS_CLUSTER_EXISTS == 'true') {
+                        echo "[INFO] El cluster EKS products-cluster ya existe. No se creará de nuevo; solo se gestionarán cambios reales."
+                    } else {
+                        echo "[INFO] El cluster EKS products-cluster no existe. Terraform lo creará si el plan lo requiere."
+                    }
+                }
+            }
+        }
+
         stage('Terraform Import Existing AWS Resources') {
             steps {
                 sh '''
@@ -207,11 +230,18 @@ pipeline {
         stage('Terraform Apply') {
             steps {
                 sh '''
-                set -e
-                set -o pipefail
-                echo '[INFO] Aplicando infraestructura con Terraform...'
-                terraform apply -input=false tfplan
-            '''
+                    set -e
+                    set -o pipefail
+
+                    if [ "${EKS_CLUSTER_EXISTS}" = "true" ]; then
+                        echo "[INFO] El cluster EKS ya existe. Terraform solo aplicará cambios reales y no lo recreará."
+                    else
+                        echo "[INFO] El cluster EKS no existe; Terraform puede crearlo en esta ejecución."
+                    fi
+
+                    echo '[INFO] Aplicando infraestructura con Terraform...'
+                    terraform apply -input=false tfplan
+                '''
             }
         }
     }
