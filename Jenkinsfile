@@ -140,7 +140,7 @@ pipeline {
                             if terraform import -input=false "$resource_addr" "$resource_id"; then
                                 echo "[INFO] Import exitoso para $resource_label."
                             else
-                                echo "[WARN] No se pudo importar $resource_label; puede que no exista o que ya esté gestionado por otro state."
+                                echo "[WARN] No se pudo importar $resource_label; puede que no exista o esté gestionado por otro state."
                             fi
                         fi
                     }
@@ -149,8 +149,14 @@ pipeline {
                         import_if_missing "module.compute.aws_ecr_repository.products_service" "products-service" "repositorio ECR products-service"
                     fi
 
+                    if aws ecr describe-repositories --repository-names products-service --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        import_if_missing "module.compute.aws_ecr_lifecycle_policy.products_service_policy" "products-service" "lifecycle policy ECR products-service"
+                    fi
+
                     if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
                         import_if_missing "module.compute.module.eks.aws_eks_cluster.this[0]" "products-cluster" "cluster EKS products-cluster"
+                        import_if_missing "module.compute.module.eks.aws_cloudwatch_log_group.this[0]" "/aws/eks/products-cluster/cluster" "log group EKS /aws/eks/products-cluster/cluster"
+                        import_if_missing "module.compute.module.eks.aws_kms_alias.this[\"cluster\"]" "alias/eks/products-cluster" "alias KMS EKS products-cluster"
                     fi
 
                     if aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-products-prod" --region "$AWS_DEFAULT_REGION" --query 'Vpcs[0].VpcId' --output text 2>/dev/null | grep -q '^vpc-'; then
