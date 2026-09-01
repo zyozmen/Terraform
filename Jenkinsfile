@@ -157,50 +157,39 @@ pipeline {
                         fi
 
                         if [ -z "$resource_id" ]; then
-                            echo "[INFO] $resource_label no tiene un identificador válido para importar."
+                            echo "[INFO] $resource_label no tiene identificador válido para importar."
                             return 0
                         fi
 
                         echo "[INFO] Importando $resource_label: $resource_addr -> $resource_id"
-                        if terraform import -input=false "$resource_addr" "$resource_id"; then
-                            echo "[INFO] Import exitoso para $resource_label."
-                        else
-                            echo "[WARN] No se pudo importar $resource_label; probablemente no existe o ya está gestionado por otro state."
-                        fi
+                        terraform import -input=false "$resource_addr" "$resource_id"
+                        echo "[INFO] Import exitoso para $resource_label."
                     }
 
                     if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-                        echo "[INFO] Cluster EKS products-cluster existe. Importando recursos del módulo EKS ya creados fuera del state."
+                        echo "[INFO] El cluster EKS products-cluster existe. Importando los recursos ya creados antes del apply."
 
-                        import_if_missing \
-                            "module.compute.module.eks.aws_eks_cluster.this[0]" \
-                            "products-cluster" \
-                            "cluster EKS products-cluster"
+                        import_if_missing "module.compute.module.eks.aws_eks_cluster.this[0]" "products-cluster" "cluster EKS products-cluster"
 
                         if aws logs describe-log-groups \
                             --log-group-name-prefix "/aws/eks/products-cluster" \
                             --region "$AWS_DEFAULT_REGION" \
                             --query "logGroups[?logGroupName=='/aws/eks/products-cluster/cluster'] | length(@)" \
                             --output text 2>/dev/null | grep -q '^1$'; then
-                            import_if_missing \
-                                "module.compute.module.eks.aws_cloudwatch_log_group.this[0]" \
-                                "/aws/eks/products-cluster/cluster" \
-                                "log group EKS /aws/eks/products-cluster/cluster"
+                            import_if_missing "module.compute.module.eks.aws_cloudwatch_log_group.this[0]" "/aws/eks/products-cluster/cluster" "log group EKS /aws/eks/products-cluster/cluster"
                         fi
 
                         if aws kms list-aliases --region "$AWS_DEFAULT_REGION" \
                             --query "Aliases[?AliasName=='alias/eks/products-cluster'] | length(@)" \
                             --output text 2>/dev/null | grep -q '^1$'; then
-                            import_if_missing \
-                                "module.compute.module.eks.module.kms.aws_kms_alias.this[\"cluster\"]" \
-                                "alias/eks/products-cluster" \
-                                "alias KMS EKS products-cluster"
+                            import_if_missing "module.compute.module.eks.module.kms.aws_kms_alias.this[\"cluster\"]" "alias/eks/products-cluster" "alias KMS EKS products-cluster"
                         fi
                     else
-                        echo "[INFO] El cluster EKS products-cluster no existe; no es necesario importar recursos del módulo EKS."
+                        echo "[INFO] El cluster EKS products-cluster no existe. No se hace import de recursos del módulo EKS."
                     fi
 
-                    echo "[INFO] Importación de recursos existentes completada."
+                    echo "[INFO] Estado actual de Terraform luego del import:"
+                    terraform state list | sed -n '1,40p'
                 '''
             }
         }
@@ -218,7 +207,7 @@ pipeline {
             steps {
                 sh '''
                     echo "[INFO] Generando plan..."
-                    terraform plan -input=false -out=tfplan
+                    terraform plan -refresh=true -input=false -out=tfplan
                 '''
             }
         }
