@@ -146,8 +146,6 @@ pipeline {
                     set -e
                     set -o pipefail
 
-                    echo "[INFO] Revisión de recursos AWS ya existentes para importarlos al state si hace falta..."
-
                     import_if_missing() {
                         resource_addr="$1"
                         resource_id="$2"
@@ -158,36 +156,51 @@ pipeline {
                             return 0
                         fi
 
-                        if [ -n "$resource_id" ] && [ "$resource_id" != "" ]; then
-                            echo "[INFO] Importando $resource_label: $resource_addr -> $resource_id"
-                            if terraform import -input=false "$resource_addr" "$resource_id"; then
-                                echo "[INFO] Import exitoso para $resource_label."
-                            else
-                                echo "[WARN] No se pudo importar $resource_label; puede que no exista o esté gestionado por otro state."
-                            fi
+                        if [ -z "$resource_id" ]; then
+                            echo "[INFO] $resource_label no tiene un identificador válido para importar."
+                            return 0
+                        fi
+
+                        echo "[INFO] Importando $resource_label: $resource_addr -> $resource_id"
+                        if terraform import -input=false "$resource_addr" "$resource_id"; then
+                            echo "[INFO] Import exitoso para $resource_label."
+                        else
+                            echo "[WARN] No se pudo importar $resource_label; probablemente no existe o ya está gestionado por otro state."
                         fi
                     }
 
-                    if aws ecr describe-repositories --repository-names products-service --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-                        import_if_missing "module.compute.aws_ecr_repository.products_service" "products-service" "repositorio ECR products-service"
-                    fi
-
-                    if aws ecr describe-repositories --repository-names products-service --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-                        import_if_missing "module.compute.aws_ecr_lifecycle_policy.products_service_policy" "products-service" "lifecycle policy ECR products-service"
-                    fi
-
                     if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
-                        import_if_missing "module.compute.module.eks.aws_eks_cluster.this[0]" "products-cluster" "cluster EKS products-cluster"
-                        import_if_missing "module.compute.module.eks.aws_cloudwatch_log_group.this[0]" "/aws/eks/products-cluster/cluster" "log group EKS /aws/eks/products-cluster/cluster"
-                        import_if_missing "module.compute.module.eks.aws_kms_alias.this[\"cluster\"]" "alias/eks/products-cluster" "alias KMS EKS products-cluster"
+                        echo "[INFO] Cluster EKS products-cluster existe. Importando recursos del módulo EKS ya creados fuera del state."
+
+                        import_if_missing \
+                            "module.compute.module.eks.aws_eks_cluster.this[0]" \
+                            "products-cluster" \
+                            "cluster EKS products-cluster"
+
+                        if aws logs describe-log-groups \
+                            --log-group-name-prefix "/aws/eks/products-cluster" \
+                            --region "$AWS_DEFAULT_REGION" \
+                            --query "logGroups[?logGroupName=='/aws/eks/products-cluster/cluster'] | length(@)" \
+                            --output text 2>/dev/null | grep -q '^1$'; then
+                            import_if_missing \
+                                "module.compute.module.eks.aws_cloudwatch_log_group.this[0]" \
+                                "/aws/eks/products-cluster/cluster" \
+                                "log group EKS /aws/eks/products-cluster/cluster"
+                        fi
+
+                        if aws kms list-aliases --region "$AWS_DEFAULT_REGION" \
+                            --query "Aliases[?AliasName=='alias/eks/products-cluster'] | length(@)" \
+                            --output text 2>/dev/null | grep -q '^1$'; then
+                            import_if_missing \
+                                "module.compute.module.eks.module.kms.aws_kms_alias.this[\"cluster\"]" \
+                                "alias/eks/products-cluster" \
+                                "alias KMS EKS products-cluster"
+                        fi
+                    else
+                        echo "[INFO] El cluster EKS products-cluster no existe; no es necesario importar recursos del módulo EKS."
                     fi
 
-                    if aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-products-prod" --region "$AWS_DEFAULT_REGION" --query 'Vpcs[0].VpcId' --output text 2>/dev/null | grep -q '^vpc-'; then
-                        VPC_ID="$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-products-prod" --region "$AWS_DEFAULT_REGION" --query 'Vpcs[0].VpcId' --output text)"
-                        import_if_missing "module.networking.aws_vpc.main" "$VPC_ID" "VPC vpc-products-prod"
-                    fi
-
-                    echo "[INFO] Verificación final de importación completada."
+                    echo "[INFO] Importación de recursos existentes completada."
                 '''
             }
         }
