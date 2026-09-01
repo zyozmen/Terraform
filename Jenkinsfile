@@ -56,13 +56,36 @@ pipeline {
 
                     aws --version
 
-                    echo "[INFO] Verificando backend S3 y bloqueo por archivo..."
-                    aws s3api head-bucket --bucket terraform-state-505231787824 --region "$AWS_DEFAULT_REGION" 2>/dev/null || \
-                    aws s3api create-bucket \
-                        --bucket products-app-terraform-state \
-                        --region "$AWS_DEFAULT_REGION" \
-                        --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION"
+                    echo "[INFO] Verificando backend S3 del proyecto y evitando fallos si ya existe..."
+                    S3_BUCKET="products-app-terraform-state"
+                    if aws s3api head-bucket --bucket "$S3_BUCKET" --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        echo "[INFO] El bucket S3 ya existe, se reutiliza: $S3_BUCKET"
+                    else
+                        echo "[INFO] Creando bucket S3: $S3_BUCKET"
+                        if aws s3api create-bucket \
+                            --bucket "$S3_BUCKET" \
+                            --region "$AWS_DEFAULT_REGION" \
+                            --create-bucket-configuration LocationConstraint="$AWS_DEFAULT_REGION" 2>/dev/null; then
+                            echo "[INFO] Bucket creado correctamente: $S3_BUCKET"
+                        else
+                            echo "[WARN] No se pudo crear $S3_BUCKET; puede que ya exista o no sea accesible desde esta cuenta."
+                        fi
+                    fi
 
+                    echo "[INFO] Verificando recursos AWS clave para no romper el pipeline si ya existen..."
+                    if aws ecr describe-repositories --repository-names products-service --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        echo "[INFO] El repositorio ECR products-service ya existe. Terraform lo reutilizará si está en state; si no, debe importarse."
+                    fi
+
+                    if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        echo "[INFO] El cluster EKS products-cluster ya existe. Terraform lo reutilizará si está en state; si no, debe importarse."
+                    fi
+
+                    if aws kms list-aliases --region "$AWS_DEFAULT_REGION" --query "Aliases[?AliasName=='alias/products-cluster'] | length(@)" --output text 2>/dev/null | grep -q '^1$'; then
+                        echo "[INFO] El alias KMS alias/products-cluster ya existe."
+                    fi
+
+                    echo "[INFO] Preflight completado. El pipeline continuará aunque los recursos ya existan y se manejarán con Terraform o import."
                 '''
             }
         }
@@ -90,6 +113,52 @@ pipeline {
                         echo "[WARN] terraform init falló; reintentando en 10 segundos..."
                         sleep 10
                     done
+                '''
+            }
+        }
+
+        stage('Terraform Import Existing AWS Resources') {
+            steps {
+                sh '''
+                    set -e
+                    set -o pipefail
+
+                    echo "[INFO] Revisión de recursos AWS ya existentes para importarlos al state si hace falta..."
+
+                    import_if_missing() {
+                        resource_addr="$1"
+                        resource_id="$2"
+                        resource_label="$3"
+
+                        if terraform state list 2>/dev/null | grep -Fqx "$resource_addr"; then
+                            echo "[INFO] $resource_label ya está en Terraform state."
+                            return 0
+                        fi
+
+                        if [ -n "$resource_id" ] && [ "$resource_id" != "" ]; then
+                            echo "[INFO] Importando $resource_label: $resource_addr -> $resource_id"
+                            if terraform import -input=false "$resource_addr" "$resource_id"; then
+                                echo "[INFO] Import exitoso para $resource_label."
+                            else
+                                echo "[WARN] No se pudo importar $resource_label; puede que no exista o que ya esté gestionado por otro state."
+                            fi
+                        fi
+                    }
+
+                    if aws ecr describe-repositories --repository-names products-service --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        import_if_missing "module.compute.aws_ecr_repository.products_service" "products-service" "repositorio ECR products-service"
+                    fi
+
+                    if aws eks describe-cluster --name products-cluster --region "$AWS_DEFAULT_REGION" >/dev/null 2>&1; then
+                        import_if_missing "module.compute.module.eks.aws_eks_cluster.this[0]" "products-cluster" "cluster EKS products-cluster"
+                    fi
+
+                    if aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-products-prod" --region "$AWS_DEFAULT_REGION" --query 'Vpcs[0].VpcId' --output text 2>/dev/null | grep -q '^vpc-'; then
+                        VPC_ID="$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=vpc-products-prod" --region "$AWS_DEFAULT_REGION" --query 'Vpcs[0].VpcId' --output text)"
+                        import_if_missing "module.networking.aws_vpc.main" "$VPC_ID" "VPC vpc-products-prod"
+                    fi
+
+                    echo "[INFO] Verificación final de importación completada."
                 '''
             }
         }
